@@ -1,0 +1,13 @@
+<RCC>
+
+    <qresource prefix="/">
+        <file>images/app_logo.png</file>
+        <file>images/profile.png</file>
+        <file>styles/style.qss</file>
+        <file>fonts/segoeui.ttf</file>
+        <file>images/banner00.png</file>
+        <file>images/audio_icon.png</file>
+        <file alias="translations/ru.qm">../translations/ru.qm</file>
+    </qresource>
+
+</RCC>

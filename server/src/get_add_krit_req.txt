@@ -1,0 +1,335 @@
+/* 903 - main.c */
+
+
+/*
+ * DONE:
+ *      REGISTER
+ *      LOGIN
+ *      VALIDATE_TOKEN
+ */
+
+/*
+ * from now body of type text/plain has structure of:
+ *
+ * \r\n
+ * line00\n
+ * line01\n
+ * line02\0
+ *
+ * or like:
+ *
+ * \r\n
+ * line00\n
+ * line01\n
+ * \n
+ * line02\n
+ * line03\0
+ */
+
+
+
+
+
+
+
+
+
+
+
+
+
+WITH
+get_user AS (
+    SELECT user_id AS id
+    FROM tokens
+    WHERE token = 'ee7c0061-0349-4466-9355-aad0783c8af2'
+),
+users_convertations_count AS (
+    SELECT COUNT(user_id) AS convertations_count
+    FROM convertations
+    GROUP BY user_id
+),
+users_max_convertations_count AS (
+    SELECT MAX(convertations_count) AS max_count
+    FROM users_convertations_count
+),
+max_last_converation_date AS (
+    SELECT EXTRACT(DAY FROM AGE(NOW(), MIN(converted_at))) AS max_date
+    FROM convertations
+),
+max_registration_date AS (
+    SELECT EXTRACT(DAY FROM AGE(MIN(created_at))) AS max_date
+    FROM users
+),
+dates_difs AS (
+    SELECT
+        user_id,
+        converted_at AS pres_date,
+        LAG(converted_at) OVER(ORDER BY converted_at) AS past_date
+    FROM convertations, get_user
+    WHERE user_id = get_user.id
+),
+all_dates_difs AS (
+    SELECT 
+        user_id,
+        converted_at AS pres_date,
+        LAG(converted_at) OVER(PARTITION BY user_id ORDER BY converted_at) AS past_date
+    FROM convertations
+    GROUP BY user_id, pres_date
+),
+all_frequencies AS (
+    SELECT AVG(EXTRACT(DAYS FROM AGE(pres_date, past_date))) as frequency
+    FROM all_dates_difs
+    GROUP BY user_id
+),
+most_used_format AS (
+    SELECT MAX(quantity) AS max_quantity
+    FROM use_of_formats, get_user
+    WHERE user_id = get_user.id
+),
+max_format_quantity AS (
+    SELECT MAX(quantity) AS max_quantity
+    FROM use_of_formats
+),
+max_format_type AS (
+    SELECT
+        CASE
+            WHEN fmts.type = 'video' THEN 1
+            WHEN fmts.type = 'audio' THEN 0.75
+            ELSE 0.25
+        END AS max_krit
+    FROM use_of_formats AS use_of_fmts
+    LEFT JOIN formats AS fmts
+    ON use_of_fmts.format_id = fmts.id
+    WHERE quantity = (SELECT max_quantity FROM max_format_quantity)
+    ORDER BY max_krit DESC
+    LIMIT 1
+),
+total_count_of_all_convertations AS (
+    SELECT
+        COUNT(user_id) / (SELECT max_count FROM users_max_convertations_count) AS krit
+    FROM
+        convertations, get_user
+    WHERE
+        user_id = get_user.id
+),
+days_from_the_last_convertation AS (
+    SELECT
+        EXTRACT(DAY FROM AGE(NOW(), converted_at))
+        / COALESCE(NULLIF(max_last_converation_date.max_date, 0), 1) AS krit
+    FROM convertations, max_last_converation_date, get_user
+    WHERE user_id = get_user.id
+    ORDER BY krit ASC
+    LIMIT 1
+),
+days_from_registration AS (
+    SELECT
+        EXTRACT(DAY FROM AGE(NOW(), created_at))
+        / (SELECT COALESCE(NULLIF(max_date, 0), 1) FROM max_registration_date) AS krit
+    FROM users, get_user
+    WHERE users.id = get_user.id
+),
+frequency AS (
+    SELECT
+        ROUND(AVG(EXTRACT(DAYS FROM AGE(dates_difs.pres_date, dates_difs.past_date)))
+        / (SELECT MAX(frequency) FROM all_frequencies), 2) AS krit
+    FROM dates_difs
+),
+most_used_format_type AS (
+    SELECT
+        CASE
+            WHEN fmts.type = 'video' THEN 1
+            WHEN fmts.type = 'audio' THEN 0.75
+            ELSE 0.25
+        END / (SELECT max_krit FROM max_format_type) AS krit
+    FROM use_of_formats AS use_of_fmts
+    LEFT JOIN formats as fmts ON use_of_fmts.format_id = fmts.id
+    WHERE quantity = (SELECT max_quantity FROM most_used_format)
+    ORDER BY krit DESC
+    LIMIT 1
+)
+
+SELECT
+    ROUND(
+        convs_count.krit 
+        - last_conv.krit * 0.5 
+        + days_from_reg.krit * 0.25
+        + freq.krit 
+        + most_used_type.krit  * 0.25, 2
+    ) AS add_krit
+FROM
+    total_count_of_all_convertations AS convs_count,
+    days_from_the_last_convertation AS last_conv,
+    days_from_registration AS days_from_reg,
+    frequency AS freq,
+    most_used_format_type AS most_used_type;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+/*
+
+NOW() instead of snprintf() + struct tm
+
+
+//  ============================
+//      ADDITIVNY_KRITERY
+//  ============================
+
+WITH
+get_user AS (
+    SELECT user_id
+    FROM tokens
+    WHERE token = $1
+),
+
+//
+//  TOTAL_COUNT_OF_ALL_CONVERTAIONS
+//
+
+WITH
+users_convertations_count AS (
+    SELECT COUNT(user_id) AS convertations_count
+    FROM convertations
+    GROUP BY user_id
+),
+users_max_convertations_count AS (
+    SELECT MAX(convertations_count) AS max_count
+    FROM users_convertations_count
+)
+
+SELECT
+    COUNT(user_id) / (SELECT max_count FROM users_max_convertations_count) AS krit
+FROM
+    convertations
+WHERE
+    user_id = '32a76200-c872-4078-b429-abf236829136';
+
+//
+//  DAYS_FROM_THE_LAST_CONVERTATION
+//
+
+WITH
+max_last_converation_date AS (
+    SELECT EXTRACT(DAY FROM AGE(NOW(), MIN(converted_at))) AS max_date
+    FROM convertations
+)
+
+SELECT
+    EXTRACT(DAY FROM AGE(NOW(), converted_at))
+    / (SELECT COALESCE(NULLIF(max_date, 0), 1) FROM max_last_converation_date) AS krit
+FROM convertations
+WHERE user_id = '32a76200-c872-4078-b429-abf236829136'
+ORDER BY krit ASC
+LIMIT 1;
+
+//
+//  DAYS_FROM_REGISITRATION
+//
+
+WITH
+max_registration_date AS (
+    SELECT EXTRACT(DAY FROM AGE(MIN(created_at))) AS max_date
+    FROM users
+)
+
+SELECT
+    EXTRACT(DAY FROM AGE(NOW(), created_at))
+    / (SELECT COALESCE(NULLIF(max_date, 0), 1) FROM max_registration_date) AS krit
+FROM users
+WHERE id = '32a76200-c872-4078-b429-abf236829136';
+
+//
+//  FREQUENCY
+//
+
+WITH
+dates_difs AS (
+    SELECT
+        user_id,
+        converted_at AS pres_date,
+        LAG(converted_at) OVER(ORDER BY converted_at) AS past_date
+    FROM convertations
+    WHERE user_id = '32a76200-c872-4078-b429-abf236829136'
+),
+all_dates_difs AS (
+    SELECT 
+        user_id,
+        converted_at AS pres_date,
+        LAG(converted_at) OVER(PARTITION BY user_id ORDER BY converted_at) AS past_date
+    FROM convertations
+    GROUP BY user_id, pres_date
+),
+all_frequencies AS (
+    SELECT AVG(EXTRACT(DAYS FROM AGE(pres_date, past_date))) as frequency
+    FROM all_dates_difs
+    GROUP BY user_id
+)
+
+SELECT
+    ROUND((SELECT AVG(EXTRACT(DAYS FROM AGE(pres_date, past_date))) FROM dates_difs)
+    / (SELECT MAX(frequency) FROM all_frequencies), 2) AS krit;
+
+//
+//  MOST_USED_FORMAT_TYPE
+//
+
+WITH
+most_used_format AS (
+    SELECT MAX(quantity) AS max_quantity
+    FROM use_of_formats
+    WHERE user_id = '32a76200-c872-4078-b429-abf236829136'
+),
+max_format_quantity AS (
+    SELECT MAX(quantity) AS max_quantity
+    FROM use_of_formats
+),
+max_format_type AS (
+    SELECT
+        CASE
+            WHEN fmts.type = 'video' THEN 1
+            WHEN fmts.type = 'audio' THEN 0.75
+            ELSE 0.25
+        END AS max_krit
+    FROM use_of_formats AS use_of_fmts
+    LEFT JOIN formats AS fmts
+    ON use_of_fmts.format_id = fmts.id
+    WHERE quantity = (SELECT max_quantity FROM max_format_quantity)
+    ORDER BY max_krit DESC
+    LIMIT 1
+)
+
+SELECT
+    CASE
+        WHEN fmts.type = 'video' THEN 1
+        WHEN fmts.type = 'audio' THEN 0.75
+        ELSE 0.25
+    END / (SELECT max_krit FROM max_format_type)AS krit
+FROM use_of_formats AS use_of_fmts
+LEFT JOIN formats as fmts ON use_of_fmts.format_id = fmts.id
+WHERE quantity = (SELECT max_quantity FROM most_used_format)
+ORDER BY krit DESC
+LIMIT 1;
+*/

@@ -1,0 +1,3 @@
+0.0.0.0
+2006
+dbname=db user=server password='server' host=127.0.0.1 port=5432 client_encoding=UTF8

@@ -1,0 +1,26 @@
+#colored-btn {
+    background-color: rgb(119, 227, 206);
+    border: 1px solid gray;
+}
+
+#colored-btn:hover {
+    background-color: rgb(95, 172, 157);
+}
+
+#colored-btn:pressed {
+    background-color: rgb(61, 112, 102);
+}
+
+#trans-btn {
+    background: transparent;
+    border: none;
+    color: black;    
+}
+
+#trans-btn:hover {
+    color: rgb(50, 50, 50);
+}
+
+#trans-btn:pressed {
+    color: rgb(100, 100, 100);
+}
