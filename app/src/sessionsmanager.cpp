@@ -5,14 +5,16 @@ void SessionsManager::saveSession(const char *token)
     QSettings settings(ORG_NAME, APP_NAME);
 
     settings.setValue("user/token", token);
+    settings.sync();
 }
 
 void SessionsManager::getSession(char *token)
 {
     QSettings settings(ORG_NAME, APP_NAME);
 
-    const char *user_token =
-        settings.value("user/token").toString().toStdString().c_str();
+    std::string token_str = settings.value("user/token").toString().toStdString();
+
+    const char *user_token = token_str.c_str();
 
     memcpy(token, user_token, strlen(user_token));
 }
@@ -21,6 +23,7 @@ void SessionsManager::deleteSession() {
     QSettings settings(ORG_NAME, APP_NAME);
 
     settings.clear();
+    settings.sync();
 }
 
 bool SessionsManager::containsSession() {
@@ -32,8 +35,9 @@ bool SessionsManager::containsSession() {
 void SessionsManager::getToken(char *token) {
     QSettings settings(ORG_NAME, APP_NAME);
 
-    const char *user_token =
-        settings.value("user/token").toString().toStdString().c_str();
+    std::string token_str = settings.value("user/token").toString().toStdString();
+
+    const char *user_token = token_str.c_str();
 
     memcpy(token, user_token, strlen(user_token));
 }
@@ -54,6 +58,7 @@ void SessionsManager::setLanguage(const QString& lang)
     log_str("> language: %s.\n", lang.toStdString().c_str());
 
     settings.setValue("language", lang);
+    settings.sync();
 }
 
 void SessionsManager::setLanguage(const char *lang)
@@ -63,6 +68,7 @@ void SessionsManager::setLanguage(const char *lang)
     log_str("> language: %s.\n", lang);
 
     settings.setValue("language", lang);
+    settings.sync();
 }
 
 //QSettings* Sessions::Manager::settings = new QSettings("bikunovmm", "converter");

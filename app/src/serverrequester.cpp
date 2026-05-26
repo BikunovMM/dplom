@@ -127,6 +127,9 @@ int ServerRequester::addToTheHistory(char          *token,
     unsigned short  port   = SERVER_PORT;
     int             ret    = 0;
 
+    log_str("[*][addToTheHistory] inpath: %s, outpath: %s, "
+            "token: %s.\n", inpath, outpath, token);
+
     client.inpath = inpath;
     client.outpath = outpath;
     client.token = token;
@@ -137,6 +140,8 @@ int ServerRequester::addToTheHistory(char          *token,
 
     log_str("[*] inpath: %s, outpath: %s.\n",
             client.inpath, client.outpath);
+
+    log_str("[*][addToTheHistory] client->body_len: %zu.\n", client.body_len);
 
     ret = initAndRun(ip, port, &client);
     if (ret < 0) {
@@ -273,14 +278,19 @@ int onBody(llhttp_t *parser, const char *at, size_t len)
         (ServerRequester::Client*)parser->data;
 
     if (!client->body) {
-        client->body = (char*)malloc(len * sizeof(char));
+        log_str("\n\n[*][onBody] allocating body!\n\n");
+        client->body = (char*)malloc(client->content_len * sizeof(char));
         if (!client->body) {
             log_err("[!] [on_status] Failed malloc client->body.\n");
             return -1;
         }
+
+        log_str("[*][onBody] len: %zu.\n", client->content_len);
+
+        client->body_len = 0;
     }
 
-    log_str("ok1\n");
+    log_str("ok1, client->body_len: %zu.\n", client->body_len);
 
     memcpy(client->body + client->body_len, at, len);
 

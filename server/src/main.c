@@ -370,6 +370,7 @@ void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
 
         PGconn   *conn = NULL;
         PGresult *res  = NULL;
+        PGresult *res1 = NULL;
 
         size_t i = 0;
         char *status = HTTP_200_STR;
@@ -409,6 +410,13 @@ void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
 
                         last_str_ptr = body_str + i + 1;
                     }
+                }
+
+                if (!strs[0] || !strs[1]) {
+                    res_str = HTTP400_RESPONSE;
+                    res_str_len = strlen(res_str);
+                    req->buf_allocated = 0;
+                    goto write_buf;
                 }
 
                 memcpy(login_str, strs[0], strs_lens[0]);
@@ -474,7 +482,9 @@ void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
                                        body_len,
                                        token, email, created_at);
 
-                res_str = (char*)malloc((res_str_len + 1) * sizeof(char));
+                res_str_len += 1; /* null-terminator */
+
+                res_str = (char*)malloc((res_str_len) * sizeof(char));
                 if (!res_str) {
                     log_err("[!][on_read] Failed to malloc.\n");
                     goto err_login_500;
@@ -506,7 +516,9 @@ void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
                                        MONTH_NAMES[cur_tm->tm_mon], cur_tm->tm_year + 1900,
                                        cur_tm->tm_hour, cur_tm->tm_min, cur_tm->tm_sec, 0);
 
-                res_str = (char*)malloc((res_str_len + 1) * sizeof(char));
+                res_str_len += 1; /* null-terminator */
+
+                res_str = (char*)malloc((res_str_len) * sizeof(char));
                 if (!res_str) {
                     log_err("[!][on_read] Failed to malloc.\n");
                     goto err_login_500;
@@ -517,8 +529,6 @@ void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
                                        DAY_NAMES[cur_tm->tm_wday], cur_tm->tm_mday,
                                        MONTH_NAMES[cur_tm->tm_mon], cur_tm->tm_year + 1900,
                                        cur_tm->tm_hour, cur_tm->tm_min, cur_tm->tm_sec, 0);
-
-                res_str[res_str_len] = '\0';
 
                 goto write_buf;
 
@@ -577,7 +587,9 @@ void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
                     MONTH_NAMES[cur_tm->tm_mon], cur_tm->tm_year + 1900,
                     cur_tm->tm_hour, cur_tm->tm_min, cur_tm->tm_sec);
 
-                res_str = (char*)malloc((res_str_len + 1) * sizeof(char));
+                res_str_len += 1; /* null-terminator */
+
+                res_str = (char*)malloc((res_str_len) * sizeof(char));
                 if (!res_str) {
                     log_err("[!][on_read] Failed to malloc.\n");
                     goto err_token_500;
@@ -590,8 +602,6 @@ void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
                     DAY_NAMES[cur_tm->tm_wday], cur_tm->tm_mday,
                     MONTH_NAMES[cur_tm->tm_mon], cur_tm->tm_year + 1900,
                     cur_tm->tm_hour, cur_tm->tm_min, cur_tm->tm_sec);
-
-                res_str[res_str_len] = '\0';
 
                 res_str_len -= 1;
 
@@ -611,8 +621,6 @@ void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
                 char   response[GET_CONVS_RES_LEN] = {0};
                 int    rows_nb                     = 0;
                 size_t str_len                     = 0;
-
-                body_str[nread] = '\0';
                 
                 cur_time = time(NULL);
                 cur_tm = localtime(&cur_time);
@@ -669,7 +677,9 @@ void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
                                        str_len,
                                        response);
 
-                res_str = (char*)malloc((res_str_len + 1) * sizeof(char));
+                res_str_len += 1; /* null-terminator */
+
+                res_str = (char*)malloc((res_str_len) * sizeof(char));
                 if (!res_str) {
                     log_err("[!][on_read] Failed to malloc.\n");
                     goto err_get_history_500;
@@ -682,8 +692,6 @@ void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
                                        cur_tm->tm_hour, cur_tm->tm_min, cur_tm->tm_sec,
                                        str_len,
                                        response);
-
-                res_str[res_str_len] = '\0';
 
                 goto write_buf;
 
@@ -702,7 +710,9 @@ void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
                                        MONTH_NAMES[cur_tm->tm_mon], cur_tm->tm_year + 1900,
                                        cur_tm->tm_hour, cur_tm->tm_min, cur_tm->tm_sec, 0);
 
-                res_str = (char*)malloc((res_str_len + 1) * sizeof(char));
+                res_str += 1; /* null-terminator */
+
+                res_str = (char*)malloc((res_str_len) * sizeof(char));
                 if (!res_str) {
                     log_err("[!][on_read] Failed to malloc.\n");
                     goto err_get_history_500;
@@ -713,8 +723,6 @@ void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
                                        DAY_NAMES[cur_tm->tm_wday], cur_tm->tm_mday,
                                        MONTH_NAMES[cur_tm->tm_mon], cur_tm->tm_year + 1900,
                                        cur_tm->tm_hour, cur_tm->tm_min, cur_tm->tm_sec, 0);
-
-                res_str[res_str_len] = '\0';
 
                 goto write_buf;
 
@@ -735,6 +743,10 @@ void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
                 
             }
             else {
+                res_str = HTTP404_RESPONSE;
+                res_str_len = strlen(res_str);
+                req->buf_allocated = 0;
+
                 log_str("[?][on_read] unknown http url/target.\n");
             }
         }
@@ -758,8 +770,8 @@ void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
                 //  PARSING_BODY_STR
                 //
              
-                for (i = 0; body_str[i] != '\0'; ++i) {
-                    if (body_str[i] == '\n') {
+                for (i = 0; i < client->content_len + 1; ++i) {
+                    if (body_str[i] == '\n' || body_str[i] == '\0') {
                         strs[cur_str] = last_str_ptr;
                         strs_lens[cur_str] = body_str + i - last_str_ptr;
 
@@ -768,7 +780,24 @@ void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
 
                         last_str_ptr = body_str + i + 1;
                     }
-                }                
+                }
+
+                if (!strs[0]) {
+                    log_err("[!][on_read] strs[0] is NULL.\n");
+                }
+                if (!strs[1]) {
+                    log_err("[!][on_read] strs[1] is NULL.\n");
+                }
+                if (!strs[2]) {
+                    log_err("[!][on_read] strs[2] is NULL.\n");
+                }
+
+                if (!strs[0] || !strs[1] || !strs[2]) {
+                    res_str = HTTP400_RESPONSE;
+                    res_str_len = strlen(res_str);
+                    req->buf_allocated = 0;
+                    goto write_buf;
+                }
 
                 memcpy(login_str, strs[0], strs_lens[0]);
                 memcpy(password_str, strs[1], strs_lens[1]);
@@ -807,6 +836,8 @@ void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
                 }
 
                 log_str("[*][on_read] ok, user doesn\'t exists.\n");
+                
+                PQclear(res);
 
                 res = PQexecParams(conn, INSERT_USER_REQ, 3, NULL,
                                    (const char * const*)params,
@@ -828,14 +859,19 @@ void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
 
                 params[0] = PQgetvalue(res, 0, 0);
                 created_at = PQgetvalue(res, 0, 1);
+
+                //strncpy(created_at, PQgetvalue(res, 0, 1), sizeof(created_at));
+
+                //PQclear(res);
+
                 //params[1] = created_at_str;
 
                 log_str("[*][on_read] goint to get_token.\n");
 
-                res = PQexecParams(conn, INSERT_RETURNING_TOKEN_REQ, 1, NULL,
+                res1 = PQexecParams(conn, INSERT_RETURNING_TOKEN_REQ, 1, NULL,
                                    (const char * const*)params,
                                    NULL, NULL, 0);
-                if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+                if (PQresultStatus(res1) != PGRES_TUPLES_OK) {
                     log_err("[!][on_read] Failed to PQexecParams "
                         "INSERT_RETURNING_TOKEN_REQ.\n");
                     goto err_reg_user_500_close_db;
@@ -843,13 +879,14 @@ void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
 
                 log_str("[*][on_read] get_token successed!\n");
 
-                if (PQntuples(res) == 0) {
+                if (PQntuples(res1) == 0) {
+                    PQclear(res1);
                     goto err_reg_user_500_close_db;                    
                 }
                 
-                token = PQgetvalue(res, 0, 0);
-
-                PQclear(res);
+                token = PQgetvalue(res1, 0, 0);
+                //strncpy()
+                
                 PQfinish(conn);
 
                 body_len = strlen(token) + strlen(created_at) + 1;
@@ -861,9 +898,14 @@ void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
                     cur_tm->tm_hour, cur_tm->tm_min, cur_tm->tm_sec,
                     body_len, token, created_at);
 
-                res_str = (char*)malloc((res_str_len + 1) * sizeof(char));
+                res_str_len += 1; /* null-terminator */
+
+                log_str("[*][on_read] res_str_len: %zu.\n", res_str_len);
+
+                res_str = (char*)malloc((res_str_len) * sizeof(char));
                 if (!res_str) {
                     log_err("[!][on_read] Failed to malloc.\n");
+                    PQclear(res1);
                     goto err_reg_user_500;
                 }
 
@@ -874,7 +916,13 @@ void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
                     cur_tm->tm_hour, cur_tm->tm_min, cur_tm->tm_sec,
                     body_len, token, created_at);
 
-                res_str[res_str_len] = '\0';
+                log_str("[*][on_read] res_str_len: %zu, strlen(res_str): %zu.\n",
+                    res_str_len, strlen(res_str));
+
+                log_str("[*][on_read] created_at: ^%s^\n", created_at);
+
+                PQclear(res);
+                PQclear(res1);
 
                 goto write_buf;
 
@@ -895,7 +943,9 @@ void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
                     MONTH_NAMES[cur_tm->tm_mon], cur_tm->tm_year + 1900,
                     cur_tm->tm_hour, cur_tm->tm_min, cur_tm->tm_sec, 0);
 
-                res_str = (char*)malloc((res_str_len + 1) * sizeof(char));
+                res_str_len += 1; /* null-terminator */
+
+                res_str = (char*)malloc((res_str_len) * sizeof(char));
                 if (!res_str) {
                     log_err("[!][on_read] Failed to malloc.\n");
                     goto err_reg_user_500;
@@ -906,8 +956,6 @@ void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
                     DAY_NAMES[cur_tm->tm_wday], cur_tm->tm_mday,
                     MONTH_NAMES[cur_tm->tm_mon], cur_tm->tm_year + 1900,
                     cur_tm->tm_hour, cur_tm->tm_min, cur_tm->tm_sec, 0);
-                
-                res_str[res_str_len] = '\0';
 
                 goto write_buf;
 
@@ -971,7 +1019,10 @@ void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
                 //
 
                 if (!strs[0] || !strs[1] || !strs[2]) {
-                    goto err_add_history_500;
+                    res_str = HTTP400_RESPONSE;
+                    res_str_len = strlen(res_str);
+                    req->buf_allocated = 0;
+                    goto write_buf;
                 }
                 
                 memcpy(token, strs[0], strs_lens[0]);
@@ -1109,7 +1160,7 @@ void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
                 log_str("[*][on_read] res_str_len: %zu, banner_len: %zu.\n",
                     res_str_len, banner_len);
 
-                res_str_len = snprintf(res_str, res_str_len + 1,
+                res_str_len = snprintf(res_str, res_str_len + 1, /* +1 cause of null-terminater pasted by snprintf*/
                     JPEG_HEADER, HTTP_201_STR,
                     DAY_NAMES[cur_tm->tm_wday], cur_tm->tm_mday,
                     MONTH_NAMES[cur_tm->tm_mon], cur_tm->tm_year + 1900,
@@ -1202,14 +1253,26 @@ void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf)
                 req->buf_allocated = 0;
             }
             else {
+                res_str = HTTP404_RESPONSE;
+                res_str_len = strlen(res_str);
+                req->buf_allocated = 0;
+
                 log_str("[?][on_read] unknown http utl/target.\n");
             }
         }
         else { /* any other method */
+            res_str = HTTP404_RESPONSE;
+            res_str_len = strlen(res_str);
+            req->buf_allocated = 0;
+
             log_str("[?][on_read] unknown http method.\n");
         }
     }
     else {
+        res_str = HTTP404_RESPONSE;
+        res_str_len = strlen(res_str);
+        req->buf_allocated = 0;
+
         log_err("[!] [on_read] Failed to llhttp_execute. "
                 "err: %s, parser->type: %s, parser->status_code: %d.\n"
                 "request_http:\n^%s^\n",

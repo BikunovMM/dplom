@@ -907,8 +907,10 @@ void MainWindow::downlFile()
 
 void MainWindow::convert()
 {
-    const char *inpath  = upl_path.toStdString().c_str();
-    const char *outpath = downl_path.toStdString().c_str();
+    std::string inpath_str = upl_path.toStdString();
+    std::string outpath_str = downl_path.toStdString();
+    const char *inpath  = inpath_str.c_str();
+    const char *outpath = outpath_str.c_str();
 
     int res = conv::convert(inpath, outpath, &convdata);
     if (res < 0) {
@@ -935,7 +937,7 @@ void MainWindow::convert()
     char token[ServerRequester::TOKEN_STR_LEN] = {};
     SessionsManager::getToken(token);
 
-    unsigned char *banner_data = NULL;
+    unsigned char *banner_data = nullptr;
     size_t banner_len = 0;
 
     res = ServerRequester::addToTheHistory(token, inpath,
@@ -949,7 +951,7 @@ void MainWindow::convert()
             [this]()
             {
                 QMessageBox::critical(this, "ошибка", //"convert_error",
-                                     "Неудалось тправить данные на сервер.", //"Failed to convert file.",
+                                     "Неудалось отправить данные на сервер.", //"Failed to convert file.",
                                      QMessageBox::Ok,
                                      QMessageBox::NoButton);
             },
@@ -959,14 +961,10 @@ void MainWindow::convert()
         return;
     }
 
-    log_str("Success!\n");
-/*
     QMetaObject::invokeMethod(this,
                               [this, banner_data, banner_len]()
                               {showBanner(banner_data, banner_len);},
                               Qt::QueuedConnection);
-*/
-    log_str("banner_shown!\n");
 }
 
 void MainWindow::setDefFn()
@@ -2003,7 +2001,7 @@ int MainWindow::regUser(QLineEdit *log_ed, QLineEdit *pass_ed,
                                   QMessageBox::Ok,
                                   QMessageBox::NoButton);
         }
-        log_str("[!][regUser] Failed to "
+        log_err("[!][regUser] Failed to "
                 "ServerRequester::registerUser.\n");
         return -1;
     }
@@ -2121,8 +2119,13 @@ void MainWindow::showBanner(unsigned char *data, size_t len)
     main_grid->setContentsMargins(0, 0, 0, 0);
     diag->setLayout(main_grid);
 
-    QPixmap pixmap;//= QPixmap(":/images/banner00.png");
-    pixmap.loadFromData(data, len);
+    QPixmap pixmap;
+    if (!pixmap.loadFromData(data, len)) {
+        log_err("[!][showBanner] Failed to loadFromData.\n");
+        delete(main_grid);
+        delete(diag);
+        return;
+    }
 
     QLabel *img_lb = new QLabel();
     img_lb->setMaximumSize(480, 270);

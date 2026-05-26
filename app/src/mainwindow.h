@@ -3,10 +3,12 @@
 
 #include <cstdio>
 #include <cstdlib>
+
 #include <future>
 #include <thread>
 #include <chrono>
 #include <functional>
+#include <string>
 
 #include <QMainWindow>
 #include <QFont>

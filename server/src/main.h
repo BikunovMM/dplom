@@ -70,13 +70,12 @@
     "insert_fmts_use AS ( "                                  \
         "INSERT INTO use_of_formats "                        \
         "(user_id, format_id, quantity) "                    \
-        "SELECT ins.id, f.id, 0 FROM formats as f, "         \
+        "SELECT ins.id, f.id, 0 FROM formats AS f, "         \
         "insert_user AS ins "                                \
-        "RETURNING  ind.id "                                 \
-        "AS user_id "                                        \
+        "RETURNING user_id "                                 \
     ") "                                                     \
-    "SELECT ins.user_id, NOW() "                             \
-    "FROM insert_fmts_use AS ins "                           \
+    "SELECT user_id, NOW() "                                 \
+    "FROM insert_fmts_use "                                  \
     "LIMIT 1;"
 
 /*
@@ -333,6 +332,7 @@
 #define HTTP_200_STR "HTTP/1.1 200 OK"
 #define HTTP_201_STR "HTTP/1.1 201 Created"
 #define HTTP_204_STR "HTTP/1.1 204 No Content"
+#define HTTP_400_STR "HTTP/1.1 400 Bad Request"
 #define HTTP_401_STR "HTTP/1.1 401 Unauthorized"
 #define HTTP_404_STR "HTTP/1.1 404 Not Found"
 #define HTTP_409_STR "HTTP/1.1 409 Conflict"
@@ -377,6 +377,20 @@
 /* predefined responses on 500 statuses */
 #define HTTP500_RESPONSE    \
     HTTP_500_STR"\r\n"      \
+    SERVER_NAME"\r\n"       \
+    "Content-Length: 0\r\n" \
+    "Connection: close\r\n" \
+    "\r\n"
+
+#define HTTP404_RESPONSE    \
+    HTTP_404_STR"\r\n"      \
+    SERVER_NAME"\r\n"       \
+    "Content-Length: 0\r\n" \
+    "Connection: close\r\n" \
+    "\r\n"
+
+#define HTTP400_RESPONSE    \
+    HTTP_400_STR"\r\n"      \
     SERVER_NAME"\r\n"       \
     "Content-Length: 0\r\n" \
     "Connection: close\r\n" \
