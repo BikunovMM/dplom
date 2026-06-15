@@ -9,6 +9,7 @@
 #include <libuv/uv.h>
 #include <llhttp/llhttp.h>
 #include <libpq/libpq-fe.h>
+#include <curl/curl.h>
 
 #include "utils.h"
 
@@ -19,6 +20,13 @@
 #define PORT_MAX_LEN 7
 #define DBCONN_MAX_LEN 256
 #define DEFAULT_BACKLOG 128
+#define CERTIFICATE_PATH "../certificates/cacert.pem"
+
+#define SMTP_SERVER_URL "smtps://smtp.gmail.com:465"
+#define SMTP_SERVER_USERNAME "m933783.635@gmail.com"
+#define SMTP_SERVER_PASSWORD "ejsr tyor nuzv eqkt"
+#define SMTP_SENDER "m933783.635@gmail.com"
+#define SERVER_EMAIL "converter <" SMTP_SERVER_USERNAME ">"
 
 #define LOGIN_STR_LEN 33
 #define PASSWORD_STR_LEN 33
@@ -31,11 +39,13 @@
 #define GET_CONVS_RES_LEN 17600
 #define MAX_RESPONSE_STR_LEN 18000
 #define GET_CONVS_RES_ROW_STR_LEN 560
+#define EMAIL_CODE_STR_LEN 6
+#define CONVERTATION_ROW_STR_LEN 8 + FILE_NAME_STR_LEN + FILE_NAME_STR_LEN + FMT_STR_LEN + FMT_STR_LEN + DATE_STR_LEN
 
 #define BANNER_PATH00 "../resources/images/banner00.png"
-#define BANNER_PATH01 "../resources/images/banner01.jpg"
-#define BANNER_PATH02 "../resources/images/banner02.jpg"
-#define BANNER_PATH03 "../resources/images/banner03.jpg"
+#define BANNER_PATH01 "../resources/images/banner01.png"
+#define BANNER_PATH02 "../resources/images/banner02.png"
+#define BANNER_PATH03 "../resources/images/banner03.png"
 
 #define BANNER_PATH00_LEN 25
 #define BANNER_PATH01_LEN 25
@@ -47,40 +57,59 @@
 #define LOGIN_USER_URL "/login"
 #define VALIDATE_TOKEN_URL "/validate_token"
 #define GET_HISTORY_URL "/get_history"
-#define GET_BANNER_URL "/get_banner"
 #define ADD_TO_THE_HISTORY_URL "/add_to_the_history"
 #define GET_USER_DATA_URL "/get_user_data"
+#define UPSERT_EMAIL_CODE_URL "/upsert_email_code"
 
 /* sql_requests_to_db */
+
+/*
+ * 1. login    (varchar)
+ * 2. password (varchar)
+ */
 #define SELECT_USER_REQ  "SELECT 1 FROM users WHERE login = $1 AND password = $2;"
 
-//(SELECT ins.id FROM insert_user as ins)
 /*
  * 1. login    (varchar)
  * 2. password (varchar)
  * 3. email    (varchar)
- */
-#define INSERT_USER_REQ                                      \
-    "WITH insert_user AS ( "                                  \
-        "INSERT INTO users (login, password, "               \
-        "email, created_at) "                                \
-        "VALUES ($1, $2, $3, NOW()) "                        \
-        "RETURNING id "                                      \
-    "), "                                                    \
-    "insert_fmts_use AS ( "                                  \
-        "INSERT INTO use_of_formats "                        \
-        "(user_id, format_id, quantity) "                    \
-        "SELECT ins.id, f.id, 0 FROM formats AS f, "         \
-        "insert_user AS ins "                                \
-        "RETURNING user_id "                                 \
-    ") "                                                     \
-    "SELECT user_id, NOW() "                                 \
-    "FROM insert_fmts_use "                                  \
+ * 4. code     (int)
+ */ 
+#define INSERT_USER_REQ                                        \
+    "WITH insert_user AS ( "                                   \
+        "INSERT INTO users (login, password, "                 \
+        "email, created_at) "                                  \
+        "VALUES ($1, $2, $3, NOW()) "                          \
+        "RETURNING id "                                        \
+    "), "                                                      \
+    "insert_fmts_use AS ( "                                    \
+        "INSERT INTO use_of_formats "                          \
+        "(user_id, format_id, quantity) "                      \
+        "SELECT ins.id, f.id, 0 FROM formats AS f, "           \
+        "insert_user AS ins "                                  \
+        "RETURNING user_id "                                   \
+    "), "                                                      \
+    "check_email_code AS ( "                                   \
+        "SELECT 1 "                                            \
+        "FROM email_codes "                                    \
+        "WHERE email = $3 AND code = $4 "                      \
+            "AND attempts < 3 AND expires_at > NOW() "         \
+        "FOR UPDATE "                                          \
+    "), "                                                      \
+    "incr_attempts_for_email_code AS ( "                       \
+        "UPDATE email_codes "                                  \
+        "SET attempts = attempts + 1 "                         \
+        "WHERE email = $3 "                                    \
+        "RETURNING attempts "                                  \
+    ") "                                                       \
+    "SELECT user_id, NOW() AS created_at "                     \
+    "FROM insert_fmts_use "                                    \
+    "WHERE EXISTS(SELECT 1 FROM check_email_code) "            \
+        "OR (SELECT FALSE FROM incr_attempts_for_email_code) " \
     "LIMIT 1;"
 
 /*
- * 1. 
- * 2.
+ * 1. user_id (varchar - uuid)
  */
 #define INSERT_RETURNING_TOKEN_REQ                          \
     "INSERT INTO tokens (user_id, created_at, expires_at) " \
@@ -120,8 +149,8 @@
             "(SELECT token FROM existing_token), "                  \
             "(SELECT token FROM new_token) "                        \
         ") AS token, "                                              \
-        "email, "                 \
-        "created_at "\
+        "email, "                                                   \
+        "created_at "                                               \
         "FROM valid_user;"
 
 /* 1: token (uuid) */
@@ -179,15 +208,17 @@
         "insert_infile, "                                                         \
         "insert_outfile;"
 
-#define GET_BANNER_REQ ""
-
-/* 1. token uuid */
+/* 
+ * 1. token uuid
+ */
 #define GET_USER_DATA_REQ                                        \
     "SELECT u.login, u.email, u.created_at "                     \
     "FROM users AS u "                                           \
     "WHERE u.id = (SELECT user_id FROM tokens WHERE token = $1);"
 
-/* 1. token uuid */
+/*
+ * 1. token uuid
+ */
 #define GET_CONVERTATIONS_REQ                                                  \
     "SELECT "                                                                  \
         "c.id, in_file.name, out_file.name, "                                  \
@@ -198,10 +229,12 @@
         "JOIN files    AS in_file    ON c.in_file_id = in_file.id "            \
         "JOIN files    AS out_file   ON c.out_file_id = out_file.id "          \
         "JOIN formats  AS in_format  ON in_file.format_id = in_format.id "     \
-        "JOIN formats  AS out_format ON out_format.format_id = out_format.id " \
+        "JOIN formats  AS out_format ON out_file.format_id = out_format.id "   \
     "WHERE t.token = $1;"
 
-/* 1. token uuid */
+/*
+ * 1. token uuid
+ */
 #define GET_ADD_KRIT_REQ                                                                       \
     "WITH "                                                                                    \
     "get_user AS ( "                                                                           \
@@ -328,6 +361,31 @@
         "frequency AS freq, "                                                                  \
         "most_used_format_type AS most_used_type;"
 
+/*
+ * 1. email (varchar)
+ */
+#define CHECK_USERS_EMAIL_REQ  "SELECT 1 FROM users WHERE email = $1;"
+
+/*
+ * 1. email (varchar)
+ * 2. code  (int)
+ */
+#define UPSERT_EMAIL_CODE_REQ                                        \
+    "INSERT INTO email_codes (email, code) VALUES ($1, $2) "         \
+    "ON CONFLICT (email) "                                           \
+    "DO UPDATE SET code = $2, "                                      \
+    "expires_at = NOW() + INTERVAL '2 hours' "                       \
+    "WHERE email_codes.attempts >= 3 OR "                            \
+    "email_codes.expires_at <= NOW();"
+
+/* smpt_messages */
+#define SEND_CODE_MSG_STR             \
+    "From: " SERVER_EMAIL "\r\n"      \
+    "To: %s\r\n"                      \
+    "Subject: Email verification\r\n" \
+    "\r\n"                            \
+    "%s"
+
 /* http_headers_statuses*/
 #define HTTP_200_STR "HTTP/1.1 200 OK"
 #define HTTP_201_STR "HTTP/1.1 201 Created"
@@ -339,7 +397,7 @@
 #define HTTP_500_STR "HTTP/1.1 500 Internal Server Error"
 #define HTTP_501_STR "HTTP/1.1 501 Not Implemented"
 
-/*  */
+/* http_headers_predefined */
 #define HTTP_CONN_CLOSE "\r\nConnection: close"
 
 /* http_headers_requests_format_strs */
@@ -445,5 +503,8 @@ void on_read(uv_stream_t *stream, ssize_t nread, const uv_buf_t *buf);
 void on_write(uv_write_t *req, int status);
 void on_close(uv_handle_t *handle);
 void on_shutdown(uv_shutdown_t *req, int status);
+
+/* libcurl callbacks */
+size_t payload_source(void *ptr, size_t size, size_t nmemb, void *udata);
 
 #endif /* MAIN_H */

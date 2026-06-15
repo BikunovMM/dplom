@@ -28,8 +28,7 @@ void TrapLabel::paintEvent(QPaintEvent *event)
     int w = width();
     int h = height();
 
-    painter.setPen(QColor::fromRgb(110, 200, 182));//QColor::fromRgb(61, 112, 102));
-    //painter.setFont()
+    painter.setPen(QColor::fromRgb(110, 200, 182));
 
     //
     //  TRAPEZOID BG

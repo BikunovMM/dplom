@@ -109,7 +109,7 @@ private:
                          QDialog *diag);
 
     int regUser(QLineEdit *log_ed, QLineEdit *pass_ed,
-                QLineEdit *email_ed);
+                QLineEdit *email_ed, QLineEdit *code_ed);
     int logUser(QLineEdit *log_ed, QLineEdit *pass_ed);
 
     void convert();
@@ -118,8 +118,8 @@ private:
     void logoutUser(QDialog *diag);
 
     void confirmEmail(QLineEdit *log_ed, QLineEdit *pass_ed,
-                      QLineEdit *email_ed, QDialog *reg_diag,
-                      QDialog *diag);
+                      QLineEdit *email_ed, QLineEdit *code_ed,
+                      QDialog *reg_diag, QDialog *diag);
 
     void showBanner(unsigned char *data, size_t len);
     void changeLanguage(QComboBox *lang_cbox,

@@ -5,8 +5,6 @@ MainWindow::MainWindow(QTranslator *trans,
                        QWidget *parent)
     : QWidget(parent)
 {
-    //QFont webdings_ft("Webdings", QFont::Normal);
-
     //
     //  MAIN_LAYOUTS
     //
@@ -32,11 +30,6 @@ MainWindow::MainWindow(QTranslator *trans,
         header_pixmap.scaled(header_logo_lb->size(),
                              Qt::KeepAspectRatio,
                              Qt::FastTransformation));
-
-    //auth_btns_box = new QVBoxLayout();
-    //header_box->addLayout(auth_btns_box, 0);
-    //header_box->setAlignment(auth_btns_box,
-    //                         Qt::AlignRight | Qt::AlignBottom);
 
     auth_btns_grid = new QGridLayout();
     header_box->addLayout(auth_btns_grid, 0);
@@ -99,15 +92,13 @@ MainWindow::MainWindow(QTranslator *trans,
         SessionsManager::getToken(token);
 
         int ret = ServerRequester::validateToken(token);
-        if (ret != ServerRequester::HTTP_200_INT) {
-            //SessionsManager::deleteSession();
+        if (ret != ServerRequester::HTTP_200_INT) {            
             prof_btn->setVisible(false);
         }
         else {
             log_btn->setVisible(false);
             reg_btn->setVisible(false);
-
-            /* todo: ServerRequester::validateToken(...); */
+            
             log_str("[*][MainWindow::ctor] loading_cur_session!\n");
         }
     }
@@ -176,14 +167,6 @@ MainWindow::MainWindow(QTranslator *trans,
             this, &MainWindow::downlFile);
     p0_grid->addWidget(p0_upl_downl_sbtn, 0, 0, 1, 2);
 
-    //p0_downl_btn = new QPushButton("download");
-    //p0_downl_btn->setSizePolicy(QSizePolicy::Expanding,
-    //                            QSizePolicy::Minimum);
-    //connect(p0_downl_btn, &QPushButton::clicked,
-    //        this, &MainWindow::downlFile);
-    //p0_grid->addWidget(p0_downl_btn, 0, 1);
-
-    //
     p0_upl_fn_grid = new QGridLayout();
     p0_upl_fn_grid->setContentsMargins(0, 0, 8, 0);
     p0_upl_fn_grid->setVerticalSpacing(0);
@@ -200,8 +183,6 @@ MainWindow::MainWindow(QTranslator *trans,
 
     p0_clear_rm_sbtn = new SlicedBtn(tr("clear"), tr("delete")); //"clear", "remove"
     p0_upl_fn_grid->addWidget(p0_clear_rm_sbtn, 1, 0, 1, 2);
-
-    //
 
     p0_fn_grid = new QGridLayout();
     p0_fn_grid->setRowStretch(2, 1);
@@ -411,7 +392,6 @@ MainWindow::MainWindow(QTranslator *trans,
     p2_right_grid->addWidget(p2_bitrate_cbox, 3, 1, 1, 1,
                        Qt::AlignVCenter | Qt::AlignRight);
 
-    /* */
     p2_nbchannels_lb = new QLabel(tr("channels quantity:")); //"nb_channels:"
     p2_right_grid->addWidget(p2_nbchannels_lb, 4, 0, 1, 1,
                              Qt::AlignVCenter | Qt::AlignRight);
@@ -430,8 +410,6 @@ MainWindow::MainWindow(QTranslator *trans,
             this, &MainWindow::paramsToDef);
     p2_grid->addWidget(p2_def_btn, 1, 0, 1, 2,
                        Qt::AlignBottom | Qt::AlignHCenter);
-
-    //pages_stw->setCurrentIndex(1);
 
     //
     //  SETTING SRAND FOR rand() in setRandFn
@@ -741,48 +719,7 @@ void MainWindow::uplFile()
 
         p1_dur_lb->setText(buf);
     }
-
-    //
-    //  GETTING PAGE2 CBOXES PARAMS
-    //
-
-    /*
-
-    if (fmtdata.type == conv::MediaType::IMG) {
-        conv::ImgData *idata = conv::getImgParams(fmtdata);
-
-        for (int i = 0; i < idata->len; ++i) {
-            conv::VidCodec *codec = &idata->codecs[i];
-
-            p2_vcodec_cbox->addItem(codec->name);
-
-            for (int j = 0; j < codec->pixfmts_len; ++j) {
-                p2_pixfmt_cbox->addItem(codec->pixfmts[j].name);
-            }
-        }
-    }
-    else if (fmtdata.type == conv::MediaType::AUD) {
-        conv::AudData *adata = conv::getAudParams(fmtdata);
-
-        for (int i = 0; i < adata->len; ++i) {
-            conv::AudCodec *codec = &adata->codecs[i];
-
-            p2_acodec_cbox->addItem(codec->name);
-
-            for (int j = 0; j < codec->)
-        }
-    }
-    else {
-
-    }
-    */
-
-
 }
-
-//static inline void
-
-
 
 void MainWindow::downlFile()
 {
@@ -898,11 +835,6 @@ void MainWindow::downlFile()
     }
 
     convfr = QtConcurrent::run(&MainWindow::convert, this);
-    //launchConvert();
-
-    //convfr = QtConcurrent::run(this, &MainWindow::convert);
-
-    //conv_fr = std::async(std::launch::async, [this](){convert();});
 }
 
 void MainWindow::convert()
@@ -912,6 +844,8 @@ void MainWindow::convert()
     const char *inpath  = inpath_str.c_str();
     const char *outpath = outpath_str.c_str();
 
+    int res = 0;
+    /*
     int res = conv::convert(inpath, outpath, &convdata);
     if (res < 0) {
         log_err("[!][convert] Failed to conv::convert.\n");
@@ -929,6 +863,7 @@ void MainWindow::convert()
 
         return;
     }
+    */
 
     if (!SessionsManager::containsSession()) {
         return;
@@ -1752,6 +1687,19 @@ void MainWindow::validateRegData(QLineEdit *log_ed,
 
     /* all_fileds_is_ok */
 
+    /* sending request to the server */
+
+    ret = ServerRequester::sendEmailCode(ed_str.toStdString().c_str());
+    if (ret != ServerRequester::HTTP_200_INT) {
+        QMessageBox::critical(this, "ошибка",
+                              "Ошибка сервера.",
+                              QMessageBox::Ok,
+                              QMessageBox::NoButton);
+        return;
+    }
+
+    /* email_confirm_win */
+
     QDialog *diag = new QDialog(this);
     diag->setWindowTitle(tr("confirm")); //"email_confirm"
     diag->setMinimumSize(300, 230);
@@ -1787,12 +1735,6 @@ void MainWindow::validateRegData(QLineEdit *log_ed,
     info_vbox->addWidget(info_lb, 0,
                          Qt::AlignTop | Qt::AlignHCenter);
 
-    //QLabel *email_lb = new QLabel("mamedova6.milana@yandex.ru");
-    //email_lb->setWordWrap(true);
-    //email_lb->setFont(segoeui14font);
-    //info_vbox->addWidget(email_lb, 0,
-    //                     Qt::AlignTop | Qt::AlignHCenter);
-
     QVBoxLayout *code_vbox = new QVBoxLayout();
     code_vbox->setSpacing(2);
     code_vbox->setContentsMargins(0, 0, 0, 8);
@@ -1809,9 +1751,9 @@ void MainWindow::validateRegData(QLineEdit *log_ed,
     confirm_btn->setMaximumSize(120, 25);
     confirm_btn->setObjectName("colored-btn");
     connect(confirm_btn, &QPushButton::clicked, this,
-            [this, log_ed, pass_ed, email_ed, reg_diag, diag]()
-            {confirmEmail(log_ed, pass_ed,
-                          email_ed, reg_diag, diag);}
+            [this, log_ed, pass_ed, email_ed, code_ed, reg_diag, diag]()
+            {confirmEmail(log_ed, pass_ed, email_ed,
+                          code_ed, reg_diag, diag);}
     );
     main_grid->addWidget(confirm_btn, 2, 0, 1, 1,
                          Qt::AlignBottom | Qt::AlignHCenter);
@@ -1824,7 +1766,6 @@ void MainWindow::validateRegData(QLineEdit *log_ed,
     delete(code_ed);
     delete(code_lb);
     delete(code_vbox);
-    //delete(email_lb);
     delete(info_lb);
     delete(main_vbox);
     delete(title_tlb);
@@ -1959,10 +1900,6 @@ void MainWindow::validateLogData(QLineEdit *log_ed,
         return;
     }
 
-    //SessionsManager::saveSession(log_ed->text().toStdString().c_str(),
-    //                             pass_ed->text().toStdString().c_str(),
-    //                             userid);
-
     QMessageBox::information(this, "иформация", //"login_info",
                              "Вход успешен!", //"Login sucessed!",
                              QMessageBox::Ok);
@@ -1976,7 +1913,7 @@ void MainWindow::validateLogData(QLineEdit *log_ed,
 }
 
 int MainWindow::regUser(QLineEdit *log_ed, QLineEdit *pass_ed,
-                        QLineEdit *email_ed)
+                        QLineEdit *email_ed, QLineEdit *code_ed)
 {    
     char token[ServerRequester::TOKEN_STR_LEN] = {};
     int ret = 0;
@@ -1987,6 +1924,7 @@ int MainWindow::regUser(QLineEdit *log_ed, QLineEdit *pass_ed,
         log_ed->text().toStdString().c_str(),
         pass_ed->text().toStdString().c_str(),
         email_ed->text().toStdString().c_str(),
+        code_ed->text().toStdString().c_str(),
         token);
     if (ret != ServerRequester::HTTP_201_INT) {
         if (ret == ServerRequester::HTTP_409_INT) {
@@ -2079,12 +2017,12 @@ void MainWindow::logoutUser(QDialog *diag)
 }
 
 void MainWindow::confirmEmail(QLineEdit *log_ed, QLineEdit *pass_ed,
-                              QLineEdit *email_ed, QDialog *reg_diag,
-                              QDialog *diag)
+                              QLineEdit *email_ed, QLineEdit *code_ed,
+                              QDialog *reg_diag, QDialog *diag)
 {
     log_str("[*][confirmEmail] going to regUser.\n");
 
-    int ret = regUser(log_ed, pass_ed, email_ed);
+    int ret = regUser(log_ed, pass_ed, email_ed, code_ed);
     if (ret < 0) {
         QMessageBox::critical(this, "ошибка", //"registration_error",
                               "Не получилось зарегистрировать аккаунт.", //"Failed to register user.",

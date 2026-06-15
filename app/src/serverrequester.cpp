@@ -1,6 +1,5 @@
 #include "serverrequester.h"
 
-#if 1
 uv_loop_t         *g_loop     = nullptr;
 llhttp_settings_t  g_settings = {};
 
@@ -28,6 +27,8 @@ void onAddToHistoryRead(uv_stream_t *stream, ssize_t nread, const uv_buf_t* buf)
 void onValTokenConn(uv_connect_t *req, int status);
 void onValTokenRead(uv_stream_t *stream, ssize_t nread, const uv_buf_t* buf);
 
+void onSendEmailCodeConn(uv_connect_t *req, int status);
+void onSendEmailCodeRead(uv_stream_t *stream, ssize_t nread, const uv_buf_t* buf);
 
 int onHeaderField(llhttp_t *parser, const char *at, size_t len);
 int onHeaderValue(llhttp_t *parser, const char *at, size_t len);
@@ -41,6 +42,7 @@ void onCloseWithoutFreeingBody(uv_handle_t *handle);
 int ServerRequester::registerUser(const char *login,
                                   const char *password,
                                   const char *email,
+                                  const char *code,
                                   char *token)
 {
     Client          client = {};
@@ -51,11 +53,14 @@ int ServerRequester::registerUser(const char *login,
     client.login    = login;
     client.password = password;
     client.email    = (char*)email;
+    client.code     = code;
     client.op       = Operations::REG_USER;
     client.on_conn  = onRegUserConn;
     client.on_write = onWrite;
     client.on_read  = onRegUserRead;
     client.token    = token;
+
+    log_str("[*][] email: %s, code: %s.\n", client.email, client.code);
 
     ret = initAndRun(ip, port, &client);
     if (ret < 0) {
@@ -173,7 +178,28 @@ int ServerRequester::validateToken(char *token)
 
     ret = initAndRun(ip, port, &client);
     if (ret < 0) {
-        log_err("[!][main] Failed to init_and_run.\n");
+        log_err("[!][main] Failed to validateToken.\n");
+    }
+
+    return client.parser.status_code;
+}
+
+int ServerRequester::sendEmailCode(const char *email)
+{
+    Client          client = {};
+    char           *ip     = SERVER_IP;
+    unsigned short  port   = SERVER_PORT;
+    int             ret    = 0;
+
+    client.email    = (char*)email;
+    client.op       = Operations::SEND_EMAIL_CODE;
+    client.on_conn  = onSendEmailCodeConn;
+    client.on_write = onWrite;
+    client.on_read  = onSendEmailCodeRead;
+
+    ret = initAndRun(ip, port, &client);
+    if (ret < 0) {
+        log_err("[!][main] Failed to sendEmailCode.\n");
     }
 
     return client.parser.status_code;
@@ -333,9 +359,9 @@ void onRegUserConn(uv_connect_t *req, int status)
             cur_tm->tm_year + 1900, cur_tm->tm_hour,
             cur_tm->tm_min, cur_tm->tm_sec,
             strlen(client->login) + strlen(client->password)
-            + strlen(client->email) + 2,
+            + strlen(client->email) + strlen(client->code)+ 3,
             client->login, client->password,
-            client->email);
+            client->email, client->code);
 
     log_str("[*][onRegUserConn] request:\n^%s^(len: %zu).\n\n",
             buf_str, buf_len);
@@ -480,6 +506,51 @@ void onValTokenConn(uv_connect_t *req, int status)
                        client->token);
 
     log_str("[*][onValTokenConn] str:\n^%s^(len: %zu).\n\n",
+            buf_str, buf_len);
+
+    client->buf = uv_buf_init(buf_str, buf_len);
+    client->wr.data = client;
+
+    llhttp_init(&client->parser, HTTP_RESPONSE, &g_settings);
+    client->parser.data = client;
+
+    uv_write(&client->wr, (uv_stream_t*)&client->socket,
+             &client->buf, 1, client->on_write);
+}
+
+void onSendEmailCodeConn(uv_connect_t *req, int status)
+{
+    if (status < 0) {
+        log_err("[!] [onSendEmailCodeConn] Failed. Status < 0.\n");
+        return;
+    }
+
+    ServerRequester::Client *client = (ServerRequester::Client*)req->data;
+    time_t cur_time = {};
+    struct tm *cur_tm = NULL;
+    char buf_str[ServerRequester::MAX_REG_REQ_LEN] = {};
+    size_t buf_len = 0;
+
+    log_str("[*][onSendEmailCodeConn]\n");
+
+    cur_time = time(NULL);
+    cur_tm = localtime(&cur_time);
+
+    client->url = ServerRequester::SEND_EMAIL_CODE_URL;
+
+    buf_len = snprintf(buf_str, sizeof(buf_str),
+                       HTTP_REQ_HEAD
+                       SEND_EMAIL_CODE_STR,
+                       ServerRequester::HTTPPOST, client->url,
+                       ServerRequester::DAY_NAMES[cur_tm->tm_wday],
+                       cur_tm->tm_mday,
+                       ServerRequester::MONTH_NAMES[cur_tm->tm_mon],
+                       cur_tm->tm_year + 1900, cur_tm->tm_hour,
+                       cur_tm->tm_min, cur_tm->tm_sec,
+                       strlen(client->email),
+                       client->email);
+
+    log_str("[*][onSendEmailCodeConn] str:\n^%s^(len: %zu).\n\n",
             buf_str, buf_len);
 
     client->buf = uv_buf_init(buf_str, buf_len);
@@ -764,6 +835,40 @@ void onValTokenRead(uv_stream_t *stream,
     uv_close((uv_handle_t*)&client->socket, onCloseWithoutFreeingBody);
 }
 
+void onSendEmailCodeRead(uv_stream_t *stream, ssize_t nread, const uv_buf_t* buf)
+{
+    log_str("[*][onSendEmailCodeRead]\n");
+
+    if (nread <= 0) {
+        log_err("[!] [onSendEmailCodeRead] Failed. nread <= 0.\n");
+        return;
+    }
+
+    ServerRequester::Client          *client = NULL;
+    llhttp_t          *parser = NULL;
+    enum llhttp_errno  err = llhttp_errno::HPE_OK;
+    int                ret = 0;
+
+    (void)ret;
+
+    client = (ServerRequester::Client*)stream;
+    parser = &client->parser;
+
+    log_str("[*][onSendEmailCodeRead] buf->base:\n^%s^\n", buf->base);
+
+    err = llhttp_execute(parser, buf->base, nread);
+    if (err == HPE_OK &&
+        parser->type == HTTP_RESPONSE)
+    {
+        log_str("[*][onSendEmailCodeRead] ok.\n");
+    }
+    else {
+        log_err("[!][onSendEmailCodeRead] Failed to llhttp_execute.\n");
+    }
+
+    uv_close((uv_handle_t*)&client->socket, onClose);
+}
+
 void onClose(uv_handle_t *handle)
 {
     log_str("[*][onClose]\n");
@@ -808,402 +913,3 @@ void onCloseWithoutFreeingBody(uv_handle_t *handle)
 
     log_str("onCloseWithoutFreeingBody is done.\n");
 }
-
-#endif
-
-
-
-
-
-#if 0
-
-#include <boost/json/src.hpp>
-
-int Server::Requester::register_user(const char *const  login,
-                                     const char *const  password,
-                                     const char *const  email,
-                                     int64_t           *user_id) noexcept
-{
-    int res = 0;
-    try {
-        asio::io_context  io_ctx;
-        json::object      req_json;
-        std::string       req_str{};
-        tcp::socket      *socket = new tcp::socket(io_ctx);
-
-        req_json["operation"] = Server::SQL_INSERT_USER;
-        req_json["login"]     = login;
-        req_json["password"]  = password;
-        req_json["email"]     = email;
-
-        req_str = json::serialize(req_json);
-
-        /* Connecting to server */
-        socket->async_connect(
-            tcp::endpoint(ip::make_address(Server::Requester::ip()),
-            Server::Requester::port()),
-            [socket, req_str, user_id, &res]
-                (const boost::system::error_code& err) mutable
-            {
-                if (err) {
-                    fprintf(stderr, "Failed to async_connect register_user.\n");
-                    delete(socket);
-                    res = Server::OP_STATUS::SERVER_ERR;
-                    return;
-                }
-
-                /* Sending user's register data */
-                asio::async_write(*socket,
-                  asio::buffer(req_str),
-                    [socket, user_id, &res]
-                        (const boost::system::error_code& err,
-                         size_t bytes) mutable
-                    {
-                        if (err) {
-                            delete(socket);
-                            res = Server::OP_STATUS::REQ_ERR;
-                            return;
-                        }
-
-                        char *buffer = (char*)malloc(128 * sizeof(char));
-                        if (!buffer) {
-                            delete(socket);
-                            res = Server::OP_STATUS::APP_ERR;
-                            return;
-                        }
-
-                        /* Reading serevr's response on user's register */
-                        socket->async_read_some(
-                            asio::buffer(buffer, 127),
-                            [socket, buffer, user_id, &res]
-                            (const boost::system::error_code& err,
-                                size_t bytes) mutable
-                            {
-                                if (err) {
-                                    free(buffer);
-                                    delete(socket);
-                                    res = Server::OP_STATUS::REQ_ERR;
-                                    return;
-                                }
-
-                                buffer[bytes] = '\0';
-                                json::object res_json = json::parse(buffer).as_object();
-
-                                *user_id = res_json["iduser"].as_int64();
-
-                                /* cleanup */
-                                free(buffer);
-                                delete(socket);
-
-                                res = (int)res_json["status"].as_int64();
-                            }
-                        );
-                    }
-                );
-            }
-        );
-
-        io_ctx.run();
-    }
-    catch (std::exception& e) {
-        fprintf(stderr, "Failed to register user. Error: %s.\n",
-                e.what());
-        return Server::OP_STATUS::APP_ERR;
-    }
-
-    return res;
-}
-
-int Server::Requester::login_user(const char *const  login,
-                                  const char *const  password,
-                                  int64_t           *user_id) noexcept
-{
-    int res = 0;
-    try {
-        asio::io_context  io_ctx;
-        json::object      req_json;
-        std::string       req_str{};
-        tcp::socket      *socket = new tcp::socket(io_ctx);
-
-        req_json["operation"] = Server::SQL_SELECT_USER;
-        req_json["login"]     = login;
-        req_json["password"]  = password;
-
-        req_str = json::serialize(req_json);
-
-        /* Connecting to server */
-        socket->async_connect(
-            tcp::endpoint(ip::make_address(Server::Requester::ip()),
-            Server::Requester::port()),
-            [socket, req_str, user_id, &res]
-            (const boost::system::error_code& err) mutable
-            {
-                if (err) {
-                    fprintf(stderr, "Failed to async_connect login_user.\n");
-                    fflush(stderr);
-                    delete(socket);
-                    res = Server::OP_STATUS::SERVER_ERR;
-                    return;
-                }
-
-                /* Writing to server login data */
-                asio::async_write(*socket,
-                    asio::buffer(req_str),
-                    [socket, user_id, &res]
-                    (const boost::system::error_code& err,
-                    size_t bytes) mutable
-                    {
-                        if (err) {
-                            delete(socket);
-                            res = Server::OP_STATUS::REQ_ERR;
-                            return;
-                        }
-
-                        char *buffer = (char*)malloc(128 * sizeof(char));
-                        if (!buffer) {
-                            delete(socket);
-                            res = Server::OP_STATUS::APP_ERR;
-                            return;
-                        }
-
-                        /* Reading server's response on user's login */
-                        socket->async_read_some(
-                            asio::buffer(buffer, 127),
-                            [socket, buffer, user_id, &res]
-                            (const boost::system::error_code& err,
-                            size_t bytes) mutable
-                            {
-                                if (err) {
-                                    free(buffer);
-                                    delete(socket);
-                                    res = Server::OP_STATUS::REQ_ERR;
-                                    return;
-                                }
-
-                                buffer[bytes] = '\0';
-                                json::object res_json = json::parse(buffer).as_object();
-
-                                *user_id = res_json["iduser"].as_int64();
-
-                                /* cleanup */
-                                free(buffer);
-                                delete(socket);
-
-                                res = (int)res_json["status"].as_int64();
-                            }
-                        );
-                    }
-                );
-            }
-        );
-
-        io_ctx.run();
-    }
-    catch (std::exception& e) {
-        fprintf(stderr, "Failed to register user. Error: %s.\n",
-                e.what());
-        return Server::OP_STATUS::APP_ERR;
-    }
-
-    return res;
-}
-
-int Server::Requester::add_convertation_to_history(const char *inpath,
-                                                   const char *outpath,
-                                                   char       *banner_data,
-                                                   size_t     *banner_data_len,
-                                                   int64_t     userid) noexcept
-{
-    int res = 0;
-    try {
-        asio::io_context  io_ctx;
-        json::object      req_json;
-        std::string       req_str{};
-        tcp::socket      *socket   = new tcp::socket(io_ctx);
-        size_t            path_len = 0;
-
-        /* Creating json with "registration_info" data */
-        req_json["operation"] = Server::SQL_INSERT_CONVERTS;
-
-        path_len = std::strlen(inpath);
-        if (path_len > Server::Requester::MAX_PATH_LEN) {
-            req_json["infn"] = &inpath[path_len
-                - Server::Requester::MAX_PATH_LEN - 1];
-            std::cout << "inpath: " << inpath[path_len - Server::Requester::MAX_PATH_LEN - 1] << std::endl;
-        }
-        else {
-            req_json["infn"] = inpath;
-        }
-
-        path_len = std::strlen(outpath);
-        if (path_len > Server::Requester::MAX_PATH_LEN) {
-            req_json["outfn"] = &outpath[path_len
-                - Server::Requester::MAX_PATH_LEN - 1];
-            std::cout << "outpath: " << outpath[path_len - Server::Requester::MAX_PATH_LEN - 1] << std::endl;
-        }
-        else {
-            req_json["outfn"] = outpath;
-        }
-
-        req_json["iduser"] = userid;
-
-        req_str = json::serialize(req_json);
-
-        /* Connecting to server */
-        socket->async_connect(
-            tcp::endpoint(ip::make_address(Server::Requester::ip()),
-            Server::Requester::port()),
-            [socket, req_str, banner_data, banner_data_len, &res/*, show_banner*/]
-            (const boost::system::error_code& err) mutable
-            {
-                if (err) {
-                    fprintf(stderr, "Failed to async_connect 288.\n");
-                    delete(socket);
-                    /*show_banner(nullptr, 0);*/
-                    puts("show_bunner(nullptr, 0) was invoked.\n");
-                    fflush(stdout);
-                    fflush(stderr);
-                    res = Server::OP_STATUS::SERVER_ERR;
-                    return;
-                }
-
-                /* Sending "convertation_info" to server */
-                asio::async_write(*socket, asio::buffer(req_str),
-                    [socket, banner_data, banner_data_len, &res/*, show_banner*/]
-                    (const boost::system::error_code& err,
-                     size_t bytes) mutable
-                    {
-                        if (err) {
-                            fprintf(stderr,
-                                    "Failed to async_write.\n");
-                            delete(socket);
-                            /*show_banner(nullptr, 0);*/
-                            res = Server::OP_STATUS::REQ_ERR;
-                            return;
-                        }
-
-                        char *buffer = (char*)
-                            malloc(11 * sizeof(char));
-                        if (!buffer) {
-                            delete(socket);
-                            /*show_banner(nullptr, 0);*/
-                            res = Server::OP_STATUS::APP_ERR;
-                            return;
-                        }
-
-                        /* Reading banner_size from server if convertation added to history */
-                        socket->async_read_some(
-                            asio::buffer(buffer, 10),
-                            [socket, buffer, banner_data, banner_data_len, &res/*, show_banner*/]
-                            (const boost::system::error_code& err,
-                             size_t bytes) mutable
-                            {
-                                if (err) {
-                                    fprintf(stderr,
-                                        "Failed to async_connect 326.\n");
-                                    delete(socket);
-                                    free(buffer);
-                                    /*show_banner(nullptr, 0);*/
-                                    puts("show_bunner on 330 line.");
-                                    fflush(stdout);
-                                    fflush(stderr);
-                                    res = Server::OP_STATUS::REQ_ERR;
-                                    return;
-                                }
-
-                                const long long buffer_len =
-                                    std::strtoll(buffer, nullptr, 10);
-
-                                //*banner_data_len = buffer_len;
-
-                                char *buffer_new = (char*)realloc(buffer, (buffer_len + 1) * sizeof(char));
-                                if (!buffer_new) {
-                                    fprintf(stderr,
-                                            "Failed to realloc buffer.\n");
-                                    delete(socket);
-                                    free(buffer);
-                                    /*show_banner(nullptr, 0);*/
-                                    res = Server::OP_STATUS::APP_ERR;
-                                    return;
-                                }
-
-                                //buffer = buffer_new;
-
-                                /* Reading banner_img from server */
-                                asio::async_read(*socket,
-                                    asio::buffer(buffer, buffer_len),
-                                    asio::transfer_exactly(buffer_len),
-                                    [socket, buffer, banner_data, banner_data_len, &res/*, show_banner*/]
-                                    (const boost::system::error_code& err,
-                                     size_t bytes) mutable
-                                    {
-                                        if (err) {
-                                            fprintf(stderr,
-                                                "! Failed to async_read.\n");
-                                            delete(socket);
-                                            free(buffer);
-                                            //show_banner(nullptr, 0);
-                                            res = Server::OP_STATUS::REQ_ERR;
-                                            return;
-                                        }
-
-                                        //show_banner(buffer, buffer_len);
-                                        //banner_data = buffer;
-
-                                        /* cleanup */
-                                        delete(socket);
-
-                                        res = Server::OP_STATUS::OK;
-                                    }
-                                );
-                            }
-                        );
-                    }
-                );
-            }
-        );
-
-        io_ctx.run();
-    }
-    catch (std::exception& e) {
-        fprintf(stderr,
-                "Failed to add_convertation_to_history. Err: %s.\n",
-                e.what());
-        return Server::OP_STATUS::APP_ERR;
-    }
-
-    return res;
-}
-
-int Server::Requester::set_up()
-{
-    std::string str_buff{};
-    QFile       config_file("configs" OS_SEPERATOR "server_config.txt");
-
-    if (!config_file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        fprintf(stderr, "! Can not open file server_config.txt.\n");
-        return Server::OP_STATUS::APP_ERR;
-    }
-
-    str_buff = config_file.readLine();
-    std::strncpy(ip_, str_buff.c_str(), str_buff.length() - 1);
-    str_buff = config_file.readLine();
-    port_ = std::strtol(str_buff.c_str(), nullptr, 10);
-
-    config_file.close();
-
-    return Server::OP_STATUS::OK;
-}
-
-char* Server::Requester::ip() noexcept {
-    return ip_;
-}
-int Server::Requester::port() noexcept {
-    return port_;
-}
-
-char           Server::Requester::ip_[16] = "127.0.0.1";
-unsigned short Server::Requester::port_   = 8765;
-
-
-#endif

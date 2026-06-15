@@ -195,12 +195,14 @@ void on_conn(uv_connect_t *req, int status)
     client_t *client = (client_t*)req->data;
     time_t cur_time = {0};
     struct tm *cur_tm = NULL;
-    char *ulogin = "Misha2006";
-    char *upassword = "12345";
-    char *uemail = "misha2006@gmail.com";
-    char *token = "ee7c0061-0349-4466-9355-aad0783c8af2";
+    char *id = "c5eb3755-f73e-4918-8c02-a9b4c59bec6e";
+    char *login = "Misha2006";
+    char *password = "12345";
+    char *email = "m933783.635@yandex.ru";
+    char *token = "d2776271-9180-4daf-942b-020c480b80d4";
+    char *code = "14327";
     char *in_file_name = "C:\\Users\\m933783\\Desktop\\img00.png";
-    char *out_file_name = "C:\\Users\\m933783\\Desktop\\img01.ico";
+    char *out_file_name = "C:\\Users\\m933783\\Desktop\\img01.ico";    
     char buf_str[MAX_REG_REQ_LEN] = {0};
 
     log_str("[*][on_conn]\n");
@@ -208,17 +210,25 @@ void on_conn(uv_connect_t *req, int status)
     cur_time = time(NULL);
     cur_tm = localtime(&cur_time);
 
-    client->url = ADD_TO_THE_HISTORY_URL;
+    client->url = UPSERT_EMAIL_CODE_URL;//GET_HISTORY_URL;
     client->content_len = 0;
     client->body_len = 0;
     
     snprintf(buf_str, sizeof(buf_str),
-        HTTP_REQ_HEAD ADD_TO_THE_HISTORY_STR,
-        HTTPPOST, client->url,
+        HTTP_REQ_HEAD UPSERT_EMAIL_CODE_STR,
+        HTTP_POST_STR, client->url,
         DAY_NAMES[cur_tm->tm_wday], cur_tm->tm_mday, MONTH_NAMES[cur_tm->tm_mon],
         cur_tm->tm_year + 1900, cur_tm->tm_hour, cur_tm->tm_min, cur_tm->tm_sec,
-        strlen(token) + strlen(in_file_name) + strlen(out_file_name) + 2,
-        token, in_file_name, out_file_name);
+        strlen(email), email);
+
+    /*
+    snprintf(buf_str, sizeof(buf_str),
+        HTTP_REQ_HEAD GET_HISTORY_STR,
+        HTTP_GET_STR, client->url,
+        DAY_NAMES[cur_tm->tm_wday], cur_tm->tm_mday, MONTH_NAMES[cur_tm->tm_mon],
+        cur_tm->tm_year + 1900, cur_tm->tm_hour, cur_tm->tm_min, cur_tm->tm_sec,
+        strlen(token), token);
+    */
 
     log_str("[*][on_conn] str:\n^%s^(len: %zu).\n\n", buf_str, strlen(buf_str));
 

@@ -70,5 +70,3 @@ void SessionsManager::setLanguage(const char *lang)
     settings.setValue("language", lang);
     settings.sync();
 }
-
-//QSettings* Sessions::Manager::settings = new QSettings("bikunovmm", "converter");

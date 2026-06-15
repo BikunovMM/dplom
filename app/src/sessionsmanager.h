@@ -2,7 +2,6 @@
 #define SESSIONSMANAGER_H
 
 #include <QSettings>
-//#include <QtKeychain> /* TODO */
 #include "appdata.h"
 
 namespace SessionsManager

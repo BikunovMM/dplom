@@ -31,10 +31,11 @@
 #define GET_HISTORY_URL "/get_history"
 #define GET_BANNER_URL "/get_banner"
 #define ADD_TO_THE_HISTORY_URL "/add_to_the_history"
+#define UPSERT_EMAIL_CODE_URL "/upsert_email_code"
 
 /* http_methods */
-#define HTTPGET "GET"
-#define HTTPPOST "POST"
+#define HTTP_GET_STR "GET"
+#define HTTP_POST_STR "POST"
 
 /* http_request_header_format_str */
 #define HTTP_REQ_HEAD                                  \
@@ -47,6 +48,7 @@
 
 /* http_body_format_str */
 #define REG_USER_STR \
+    "%s\n"           \
     "%s\n"           \
     "%s\n"           \
     "%s"
@@ -62,10 +64,14 @@
 
 #define VALIDATE_TOKEN_STR "%s"
 
+#define GET_HISTORY_STR "%s"
+
 #define ADD_TO_THE_HISTORY_STR \
     "%s\n"                     \
     "%s\n"                     \
     "%s"
+
+#define UPSERT_EMAIL_CODE_STR "%s"
 
 /* responses_values */
 #define VALID_TOKEN   "1"
